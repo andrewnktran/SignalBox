@@ -1,46 +1,46 @@
 #include "sender.h"
-#include <winsock2.h>
-#include <ws2tcpip.h>
 #include <iostream>
+#include <cstring>
 
+#if defined(_WIN32)
+#include <winsock2.h>
 #pragma comment(lib, "ws2_32.lib")
-
-namespace {
-    bool initialized = false;
-    SOCKET sock;
-    sockaddr_in serverAddr;
-}
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#endif
 
 void sendPacketUDP(const TelemetryPacket& pkt) {
-    if (!initialized) {
-        WSADATA wsaData;
-        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
-            std::cerr << "[Send] WSAStartup failed.\n";
-            return;
-        }
+    // Serialize packet into buffer
+    char buffer[sizeof(pkt.timestamp) + sizeof(pkt.sensor_id) + sizeof(pkt.value)];
+    std::memcpy(buffer, &pkt.timestamp, sizeof(pkt.timestamp));
+    std::memcpy(buffer + sizeof(pkt.timestamp), &pkt.sensor_id, sizeof(pkt.sensor_id));
+    std::memcpy(buffer + sizeof(pkt.timestamp) + sizeof(pkt.sensor_id), &pkt.value, sizeof(pkt.value));
 
-        sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (sock == INVALID_SOCKET) {
-            std::cerr << "[Send] Failed to create socket.\n";
-            WSACleanup();
-            return;
-        }
+#if defined(_WIN32)
+    WSADATA wsa;
+    WSAStartup(MAKEWORD(2, 2), &wsa);
+#endif
 
-        serverAddr.sin_family = AF_INET;
-        serverAddr.sin_port = htons(9000);
-        inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
-
-        initialized = true;
+    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) {
+        std::cerr << "Failed to create socket\n";
+        return;
     }
 
-    sendto(sock, reinterpret_cast<const char*>(&pkt), sizeof(pkt), 0,
-        reinterpret_cast<sockaddr*>(&serverAddr), sizeof(serverAddr));
-}
+    sockaddr_in addr{};
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(9000);
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
-void cleanupSender() {
-    if (initialized) {
-        closesocket(sock);
-        WSACleanup();
-        initialized = false;
-    }
+    sendto(sock, buffer, sizeof(buffer), 0, (sockaddr*)&addr, sizeof(addr));
+
+#if defined(_WIN32)
+    closesocket(sock);
+    WSACleanup();
+#else
+    close(sock);
+#endif
 }

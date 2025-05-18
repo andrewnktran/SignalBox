@@ -10,7 +10,7 @@ add_executable(SignalBox
     src/producer.cpp
     src/consumer.cpp
     src/parser.cpp
- "include/shared_types.h")
+ "include/shared_types.h" "include/sender.h" "src/sender.cpp")
 
  add_custom_target(clean-all
   COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/Debug

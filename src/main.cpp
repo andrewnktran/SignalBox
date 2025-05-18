@@ -202,6 +202,5 @@ int main(int argc, char* argv[]) {
     }
 
     logfile.close();
-    cleanupSender();
     return 0;
 }

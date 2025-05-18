@@ -1,0 +1,10 @@
+build/
+.vs/
+*.bin
+*.csv
+*.json
+*.exe
+*.log
+*.suo
+*.user
+CMakeSettings.json

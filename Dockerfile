@@ -1,17 +1,18 @@
-FROM gcc:12
-
-LABEL name="SignalBox"
+# Use a C++ build image
+FROM debian:bookworm AS builder
 
 RUN apt-get update && \
-    apt-get install -y cmake libgtest-dev && \
-    cd /usr/src/gtest && \
-    cmake CMakeLists.txt && \
-    make && \
-    cp *.a /usr/lib
+    apt-get install -y g++ cmake make
 
 WORKDIR /app
-COPY . /app
+COPY . .
 
-RUN cmake -S . -B build && cmake --build build
+RUN mkdir build && cd build && cmake .. && cmake --build .
 
-CMD ["./build/SignalBox"]
+# Final image (slim)
+FROM debian:bookworm
+
+WORKDIR /app
+COPY --from=builder /app/build/SignalBox /app/SignalBox
+
+ENTRYPOINT ["./SignalBox"]
