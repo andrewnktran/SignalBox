@@ -1,0 +1,6 @@
+# .gitignore
+build/
+out/
+.vs/
+*.exe
+CMakeSettings.json
