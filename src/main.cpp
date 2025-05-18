@@ -8,32 +8,16 @@
 #include <iomanip>
 #include <sstream>
 #include <map>
-#include <algorithm>
 #include "parser.h"
-
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <unistd.h>
-#endif
-
-void clearScreen() {
-#ifdef _WIN32
-    system("cls");
-#else
-    std::cout << "\033[2J\033[H";
-#endif
-}
 
 int main(int argc, char* argv[]) {
     std::cout << "SignalBox Starting...\n";
 
     int sensorFilter = -1;
     std::string decodeFile;
-    std::string format = "csv";
-    bool liveMode = false;
+    bool showStats = false;
 
-    // Step 1: Early pass for --decode and --sensor
+    // Step 1: Early pass for --decode, --sensor, --stats
     for (int i = 1; i < argc; ++i) {
         std::string arg(argv[i]);
         if (arg.rfind("--decode=", 0) == 0) {
@@ -42,11 +26,8 @@ int main(int argc, char* argv[]) {
         else if (arg.rfind("--sensor=", 0) == 0) {
             sensorFilter = std::stoi(arg.substr(9));
         }
-        else if (arg.rfind("--format=", 0) == 0) {
-            format = arg.substr(9);
-        }
-        else if (arg == "--live") {
-            liveMode = true;
+        else if (arg == "--stats") {
+            showStats = true;
         }
     }
 
@@ -58,18 +39,10 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
-        std::string outputExt = (format == "json") ? "_decoded.json" : "_decoded.csv";
-        std::string outputFile = decodeFile.substr(0, decodeFile.find_last_of('.')) + outputExt;
-        std::ofstream output(outputFile);
+        std::string csvFile = decodeFile.substr(0, decodeFile.find_last_of('.')) + "_decoded.csv";
+        std::ofstream output(csvFile);
+        output << "timestamp,sensor_id,value\n";
 
-        if (format == "json") {
-            output << "[\n";
-        }
-        else {
-            output << "timestamp,sensor_id,value\n";
-        }
-
-        bool first = true;
         while (input.peek() != EOF) {
             TelemetryPacket pkt;
             input.read(reinterpret_cast<char*>(&pkt.timestamp), sizeof(pkt.timestamp));
@@ -79,22 +52,11 @@ int main(int argc, char* argv[]) {
             if (input.gcount() < sizeof(pkt.value)) break;
 
             if (sensorFilter == -1 || pkt.sensor_id == sensorFilter) {
-                if (format == "json") {
-                    if (!first) output << ",\n";
-                    output << "  { \"timestamp\": " << pkt.timestamp << ", \"sensor_id\": " << pkt.sensor_id << ", \"value\": " << pkt.value << " }";
-                    first = false;
-                }
-                else {
-                    output << pkt.timestamp << "," << pkt.sensor_id << "," << pkt.value << "\n";
-                }
+                output << pkt.timestamp << "," << pkt.sensor_id << "," << pkt.value << "\n";
             }
         }
 
-        if (format == "json") {
-            output << "\n]\n";
-        }
-
-        std::cout << "Decoded " << decodeFile << " to " << outputFile;
+        std::cout << "Decoded " << decodeFile << " to " << csvFile;
         if (sensorFilter != -1) {
             std::cout << " (filtered by sensor " << sensorFilter << ")";
         }
@@ -108,6 +70,8 @@ int main(int argc, char* argv[]) {
     bool appendMode = false;
     bool userProvidedLog = false;
     bool binaryMode = false;
+    bool liveMode = false;
+    std::string outputFormat = "csv";
 
     for (int i = 1; i < argc; ++i) {
         std::string arg(argv[i]);
@@ -124,6 +88,22 @@ int main(int argc, char* argv[]) {
         else if (arg == "--binary") {
             binaryMode = true;
         }
+        else if (arg == "--live") {
+            liveMode = true;
+        }
+        else if (arg.rfind("--format=", 0) == 0) {
+            outputFormat = arg.substr(9);
+        }
+        else if (arg == "--stats") {
+            showStats = true;
+        }
+        else if (arg.rfind("--sensor=", 0) == 0 || arg.rfind("--decode=", 0) == 0) {
+            // already handled
+        }
+        else {
+            std::cerr << "Unknown option: " << arg << std::endl;
+            return 1;
+        }
     }
 
     if (!userProvidedLog) {
@@ -131,8 +111,8 @@ int main(int argc, char* argv[]) {
         std::time_t t = std::chrono::system_clock::to_time_t(now);
         std::stringstream ss;
         ss << (binaryMode ? "telemetry_" : "log_")
-            << std::put_time(std::localtime(&t), "%Y%m%d_%H%M%S");
-        ss << ((format == "json") ? ".json" : (binaryMode ? ".bin" : ".csv"));
+            << std::put_time(std::localtime(&t), "%Y%m%d_%H%M%S")
+            << (outputFormat == "json" ? ".json" : (binaryMode ? ".bin" : ".csv"));
         logFileName = ss.str();
     }
 
@@ -142,28 +122,28 @@ int main(int argc, char* argv[]) {
     }
     else {
         logfile.open(logFileName, appendMode ? std::ios::app : std::ios::trunc);
-        if (!appendMode && format == "csv") {
+        if (!appendMode && outputFormat == "csv") {
             logfile << "timestamp,sensor_id,value\n";
-        }
-        else if (!appendMode && format == "json") {
-            logfile << "[\n";
         }
     }
 
-    std::map<int, TelemetryPacket> latestBySensor;
-    bool firstJson = true;
+    std::map<int, std::vector<int>> sensorData;
 
-    for (int i = 0; i < count; ++i) {
-        TelemetryPacket pkt = parseRawPacket(generateRawPacket());
-        if (sensorFilter != -1 && pkt.sensor_id != sensorFilter) continue;
+    int written = 0;
+    while (written < count) {
+        std::vector<uint8_t> raw = generateRawPacket();
+        TelemetryPacket pkt = parseRawPacket(raw);
+
+        if (sensorFilter != -1 && pkt.sensor_id != sensorFilter) {
+            continue;
+        }
+
+        if (showStats) {
+            sensorData[pkt.sensor_id].push_back(pkt.value);
+        }
 
         if (liveMode) {
-            latestBySensor[pkt.sensor_id] = pkt;
-            clearScreen();
-            std::cout << "Live Telemetry:\n";
-            for (const auto& [id, p] : latestBySensor) {
-                std::cout << "Sensor " << id << ": Value = " << p.value << " at " << p.timestamp << "\n";
-            }
+            std::cout << "\rTimestamp: " << pkt.timestamp << ", Sensor ID: " << pkt.sensor_id << ", Value: " << pkt.value << std::flush;
         }
         else {
             std::cout << "Timestamp: " << pkt.timestamp << ", Sensor ID: " << pkt.sensor_id << ", Value: " << pkt.value << "\n";
@@ -174,22 +154,31 @@ int main(int argc, char* argv[]) {
             logfile.write(reinterpret_cast<const char*>(&pkt.sensor_id), sizeof(pkt.sensor_id));
             logfile.write(reinterpret_cast<const char*>(&pkt.value), sizeof(pkt.value));
         }
-        else if (format == "json") {
-            if (!firstJson) logfile << ",\n";
-            logfile << "  { \"timestamp\": " << pkt.timestamp << ", \"sensor_id\": " << pkt.sensor_id << ", \"value\": " << pkt.value << " }";
-            firstJson = false;
+        else if (outputFormat == "json") {
+            logfile << "{\"timestamp\":" << pkt.timestamp
+                << ",\"sensor_id\":" << pkt.sensor_id
+                << ",\"value\":" << pkt.value << "},\n";
         }
         else {
             logfile << pkt.timestamp << "," << pkt.sensor_id << "," << pkt.value << "\n";
         }
 
+        ++written;
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
 
-    if (format == "json" && !binaryMode) {
-        logfile << "\n]\n";
+    logfile.close();
+
+    if (showStats) {
+        std::cout << "\n\nTelemetry Summary:\n";
+        for (const auto& [sensor_id, values] : sensorData) {
+            int count = values.size();
+            double avg = 0.0;
+            for (int v : values) avg += v;
+            avg /= count;
+            std::cout << "Sensor " << sensor_id << " — Count: " << count << ", Avg: " << avg << "\n";
+        }
     }
 
-    logfile.close();
     return 0;
 }
