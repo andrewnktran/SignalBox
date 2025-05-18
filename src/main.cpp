@@ -1,19 +1,27 @@
 #include <iostream>
+#include <fstream>
 #include <thread>
+#include <chrono>
 #include "parser.h"
-#include "producer.h"
-#include "consumer.h"
 
 int main() {
     std::cout << "SignalBox Starting...\n";
 
-    PacketQueue queue;
+    std::ofstream logfile("telemetry_log.csv");
+    logfile << "timestamp,sensor_id,value\n";
 
-    std::thread producer_thread(startProducer, std::ref(queue));
-    std::thread consumer_thread(startConsumer, std::ref(queue));
+    for (int i = 0; i < 10; ++i) {
+        TelemetryPacket pkt = generatePacket();
 
-    producer_thread.join();
-    consumer_thread.join();
+        std::cout << "Timestamp: " << pkt.timestamp
+            << ", Sensor ID: " << pkt.sensor_id
+            << ", Value: " << pkt.value << std::endl;
 
+        logfile << pkt.timestamp << "," << pkt.sensor_id << "," << pkt.value << "\n";
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    }
+
+    logfile.close();
     return 0;
 }
