@@ -31,6 +31,10 @@ int main(int argc, char* argv[]) {
     std::ofstream logfile(logFileName);
     logfile << "timestamp,sensor_id,value\n";
 
+    // ---------------------------------------------
+    // CLI Support: --count=N and --log=filename.csv
+    // Generates N packets and writes them to CSV
+    // ---------------------------------------------
     for (int i = 0; i < count; ++i) {
         TelemetryPacket pkt = generatePacket();
 
