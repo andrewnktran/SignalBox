@@ -16,6 +16,7 @@ int main(int argc, char* argv[]) {
     std::string logFileName;
     bool appendMode = false;
     bool userProvidedLog = false;
+    int sensorFilter = -1;  // -1 means no filter
 
     // Parse CLI arguments
     for (int i = 1; i < argc; ++i) {
@@ -29,6 +30,9 @@ int main(int argc, char* argv[]) {
         }
         else if (arg == "--append") {
             appendMode = true;
+        }
+        else if (arg.rfind("--sensor=", 0) == 0) {
+            sensorFilter = std::stoi(arg.substr(9));
         }
         else {
             std::cerr << "Unknown option: " << arg << std::endl;
@@ -54,15 +58,21 @@ int main(int argc, char* argv[]) {
         logfile << "timestamp,sensor_id,value\n";
     }
 
-    for (int i = 0; i < count; ++i) {
+    int written = 0;
+    while (written < count) {
         std::vector<uint8_t> raw = generateRawPacket();
         TelemetryPacket pkt = parseRawPacket(raw);
+
+        if (sensorFilter != -1 && pkt.sensor_id != sensorFilter) {
+            continue; // Skip non-matching packets
+        }
 
         std::cout << "Timestamp: " << pkt.timestamp
             << ", Sensor ID: " << pkt.sensor_id
             << ", Value: " << pkt.value << std::endl;
 
         logfile << pkt.timestamp << "," << pkt.sensor_id << "," << pkt.value << "\n";
+        ++written;
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
