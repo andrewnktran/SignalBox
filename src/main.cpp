@@ -12,14 +12,45 @@
 int main(int argc, char* argv[]) {
     std::cout << "SignalBox Starting...\n";
 
+    // DECODE MODE CHECK
+    for (int i = 1; i < argc; ++i) {
+        std::string arg(argv[i]);
+        if (arg.rfind("--decode=", 0) == 0) {
+            std::string binFile = arg.substr(9);
+            std::ifstream input(binFile, std::ios::binary);
+            if (!input) {
+                std::cerr << "Failed to open " << binFile << " for reading.\n";
+                return 1;
+            }
+
+            std::string csvFile = binFile.substr(0, binFile.find_last_of('.')) + "_decoded.csv";
+            std::ofstream output(csvFile);
+            output << "timestamp,sensor_id,value\n";
+
+            while (input.peek() != EOF) {
+                TelemetryPacket pkt;
+                input.read(reinterpret_cast<char*>(&pkt.timestamp), sizeof(pkt.timestamp));
+                input.read(reinterpret_cast<char*>(&pkt.sensor_id), sizeof(pkt.sensor_id));
+                input.read(reinterpret_cast<char*>(&pkt.value), sizeof(pkt.value));
+
+                if (input.gcount() < sizeof(pkt.value)) break;
+
+                output << pkt.timestamp << "," << pkt.sensor_id << "," << pkt.value << "\n";
+            }
+
+            std::cout << "Decoded " << binFile << " to " << csvFile << "\n";
+            return 0;
+        }
+    }
+
+    // REGULAR PACKET GENERATION MODE
     int count = 10;
     std::string logFileName;
     bool appendMode = false;
     bool userProvidedLog = false;
-    int sensorFilter = -1;  // -1 means no filter
+    int sensorFilter = -1;
     bool binaryMode = false;
 
-    // Parse CLI arguments
     for (int i = 1; i < argc; ++i) {
         std::string arg(argv[i]);
         if (arg.rfind("--count=", 0) == 0) {
@@ -44,7 +75,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // Generate default log filename if not provided
     if (!userProvidedLog) {
         auto now = std::chrono::system_clock::now();
         std::time_t t = std::chrono::system_clock::to_time_t(now);
@@ -72,7 +102,7 @@ int main(int argc, char* argv[]) {
         TelemetryPacket pkt = parseRawPacket(raw);
 
         if (sensorFilter != -1 && pkt.sensor_id != sensorFilter) {
-            continue; // Skip non-matching packets
+            continue;
         }
 
         std::cout << "Timestamp: " << pkt.timestamp
