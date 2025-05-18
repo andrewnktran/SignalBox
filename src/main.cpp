@@ -5,21 +5,19 @@
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <iomanip>
+#include <sstream>
 #include "parser.h"
-
-// ---------------------------------------------
-// CLI Support: --count, --log, --append
-// Now includes raw packet parsing simulation
-// ---------------------------------------------
 
 int main(int argc, char* argv[]) {
     std::cout << "SignalBox Starting...\n";
 
     int count = 10;
-    std::string logFileName = "telemetry_log.csv";
+    std::string logFileName;
     bool appendMode = false;
+    bool userProvidedLog = false;
 
-    // Parse CLI args
+    // Parse CLI arguments
     for (int i = 1; i < argc; ++i) {
         std::string arg(argv[i]);
         if (arg.rfind("--count=", 0) == 0) {
@@ -27,6 +25,7 @@ int main(int argc, char* argv[]) {
         }
         else if (arg.rfind("--log=", 0) == 0) {
             logFileName = arg.substr(6);
+            userProvidedLog = true;
         }
         else if (arg == "--append") {
             appendMode = true;
@@ -35,6 +34,15 @@ int main(int argc, char* argv[]) {
             std::cerr << "Unknown option: " << arg << std::endl;
             return 1;
         }
+    }
+
+    // Generate default log filename if not provided
+    if (!userProvidedLog) {
+        auto now = std::chrono::system_clock::now();
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+        std::stringstream ss;
+        ss << "log_" << std::put_time(std::localtime(&t), "%Y%m%d_%H%M%S") << ".csv";
+        logFileName = ss.str();
     }
 
     std::ofstream logfile;
