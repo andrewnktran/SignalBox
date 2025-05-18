@@ -9,9 +9,9 @@
 int main(int argc, char* argv[]) {
     std::cout << "SignalBox Starting...\n";
 
-    // Defaults
     int count = 10;
     std::string logFileName = "telemetry_log.csv";
+    bool appendMode = false;
 
     // Parse CLI args
     for (int i = 1; i < argc; ++i) {
@@ -22,19 +22,24 @@ int main(int argc, char* argv[]) {
         else if (arg.rfind("--log=", 0) == 0) {
             logFileName = arg.substr(6);
         }
+        else if (arg == "--append") {
+            appendMode = true;
+        }
         else {
             std::cerr << "Unknown option: " << arg << std::endl;
             return 1;
         }
     }
 
-    std::ofstream logfile(logFileName);
-    logfile << "timestamp,sensor_id,value\n";
+    std::ofstream logfile;
+    if (appendMode) {
+        logfile.open(logFileName, std::ios::app);
+    }
+    else {
+        logfile.open(logFileName);
+        logfile << "timestamp,sensor_id,value\n";
+    }
 
-    // ---------------------------------------------
-    // CLI Support: --count=N and --log=filename.csv
-    // Generates N packets and writes them to CSV
-    // ---------------------------------------------
     for (int i = 0; i < count; ++i) {
         TelemetryPacket pkt = generatePacket();
 
