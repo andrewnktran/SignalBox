@@ -1,18 +1,29 @@
+// src/producer.cpp
 #include "producer.h"
-#include <random>
-#include <iostream>
 #include <thread>
+#include <chrono>
 
-void startProducer(PacketQueue& queue) {
-    for (int i = 0; i < 10; ++i) {
+void startProducer(PacketQueue& queue, int count, int sensorFilter) {
+    for (int i = 0; i < count; ++i) {
         auto raw = generateRawPacket();
         TelemetryPacket pkt = parseRawPacket(raw);
-        queue.push(pkt);
 
-        std::cout << "[Producer] Queued packet: "
-            << pkt.timestamp << ", Sensor: " << (int)pkt.sensor_id
-            << ", Value: " << pkt.value << "\n";
+        if (sensorFilter != -1 && pkt.sensor_id != sensorFilter) {
+            continue;
+        }
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        {
+            std::lock_guard<std::mutex> lock(queue.mtx);
+            queue.queue.push(pkt);
+        }
+
+        queue.cv.notify_one();
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
+
+    {
+        std::lock_guard<std::mutex> lock(queue.mtx);
+        queue.done = true;
+    }
+    queue.cv.notify_all();
 }

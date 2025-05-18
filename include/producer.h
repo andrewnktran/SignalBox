@@ -1,8 +1,5 @@
+// include/producer.h
 #pragma once
+#include "shared_types.h"
 
-#include <queue>
-#include "parser.h"
-
-using PacketQueue = std::queue<TelemetryPacket>;
-
-void startProducer(PacketQueue& queue);
+void startProducer(PacketQueue& queue, int count, int sensorFilter);

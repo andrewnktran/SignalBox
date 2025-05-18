@@ -8,12 +8,16 @@
 #include <iomanip>
 #include <sstream>
 #include "parser.h"
+#include "producer.h"
+#include "consumer.h"
+#include "shared_types.h"
 
 int main(int argc, char* argv[]) {
     std::cout << "SignalBox Starting...\n";
 
     int sensorFilter = -1;
     std::string decodeFile;
+    bool threadMode = false;
 
     // Step 1: Early pass for --decode and --sensor
     for (int i = 1; i < argc; ++i) {
@@ -81,10 +85,10 @@ int main(int argc, char* argv[]) {
         else if (arg == "--binary") {
             binaryMode = true;
         }
-        else if (arg.rfind("--sensor=", 0) == 0) {
-            // Already handled
+        else if (arg == "--threads") {
+            threadMode = true;
         }
-        else if (arg.rfind("--decode=", 0) == 0) {
+        else if (arg.rfind("--sensor=", 0) == 0 || arg.rfind("--decode=", 0) == 0) {
             // Already handled
         }
         else {
@@ -103,6 +107,18 @@ int main(int argc, char* argv[]) {
         logFileName = ss.str();
     }
 
+    // Step 4: Threaded mode
+    if (threadMode) {
+        PacketQueue queue;
+        std::thread producer(startProducer, std::ref(queue), count, sensorFilter);
+        std::thread consumer(startConsumer, std::ref(queue), logFileName, binaryMode);
+
+        producer.join();
+        consumer.join();
+        return 0;
+    }
+
+    // Step 5: Non-threaded fallback
     std::ofstream logfile;
     if (binaryMode) {
         logfile.open(logFileName, std::ios::binary | (appendMode ? std::ios::app : std::ios::trunc));
@@ -143,4 +159,3 @@ int main(int argc, char* argv[]) {
     logfile.close();
     return 0;
 }
-
