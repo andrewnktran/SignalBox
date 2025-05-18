@@ -3,8 +3,14 @@
 #include <thread>
 #include <chrono>
 #include <string>
+#include <vector>
 #include <cstdlib>
 #include "parser.h"
+
+// ---------------------------------------------
+// CLI Support: --count, --log, --append
+// Now includes raw packet parsing simulation
+// ---------------------------------------------
 
 int main(int argc, char* argv[]) {
     std::cout << "SignalBox Starting...\n";
@@ -41,7 +47,8 @@ int main(int argc, char* argv[]) {
     }
 
     for (int i = 0; i < count; ++i) {
-        TelemetryPacket pkt = generatePacket();
+        std::vector<uint8_t> raw = generateRawPacket();
+        TelemetryPacket pkt = parseRawPacket(raw);
 
         std::cout << "Timestamp: " << pkt.timestamp
             << ", Sensor ID: " << pkt.sensor_id
