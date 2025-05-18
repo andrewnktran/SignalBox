@@ -10,7 +10,7 @@ add_executable(SignalBox
     src/producer.cpp
     src/consumer.cpp
     src/parser.cpp
-)
+ "include/shared_types.h")
 
 enable_testing()
 add_subdirectory(tests)

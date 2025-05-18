@@ -1,4 +1,6 @@
+// include/consumer.h
 #pragma once
-#include "parser.h"
+
+#include "shared_types.h"
 
 void startConsumer(PacketQueue& queue);

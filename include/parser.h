@@ -1,8 +1,6 @@
 #pragma once
 #include <cstdint>
-#include <queue>
-#include <mutex>
-#include <condition_variable>
+#include <vector>
 
 struct TelemetryPacket {
     uint32_t timestamp;
@@ -10,24 +8,8 @@ struct TelemetryPacket {
     int16_t value;
 };
 
-class PacketQueue {
-public:
-    void push(const TelemetryPacket& packet) {
-        std::lock_guard<std::mutex> lock(mtx);
-        q.push(packet);
-        cv.notify_one();
-    }
+// Generate a random binary packet
+std::vector<uint8_t> generateRawPacket();
 
-    TelemetryPacket pop() {
-        std::unique_lock<std::mutex> lock(mtx);
-        cv.wait(lock, [this]{ return !q.empty(); });
-        TelemetryPacket packet = q.front();
-        q.pop();
-        return packet;
-    }
-
-private:
-    std::queue<TelemetryPacket> q;
-    std::mutex mtx;
-    std::condition_variable cv;
-};
+// Parse 8-byte binary data into a structured packet
+TelemetryPacket parseRawPacket(const std::vector<uint8_t>& data);
