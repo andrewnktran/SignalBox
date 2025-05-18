@@ -12,5 +12,11 @@ add_executable(SignalBox
     src/parser.cpp
  "include/shared_types.h")
 
+ add_custom_target(clean-all
+  COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/Debug
+  COMMENT "Cleaning Debug folder"
+)
+
+
 enable_testing()
 add_subdirectory(tests)
